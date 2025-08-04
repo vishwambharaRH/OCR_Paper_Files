@@ -16,19 +16,15 @@ from google.cloud import vision
 import glob
 import requests
 
-# file paths
-TEMP_IMG_FOLDER = "pdf_pages"
-FIRST_OUTPUT_FILE = "tesseract.txt" # or vision.txt
-CORRECTED_OUTPUT_FILE = "gptTesseract.txt" # or any other combination of ocr agent and LLM
-PDF_FILE = "your_pdf_file.pdf"  # replace with your actual PDF file path
-
-# API keys
-OPENAI_API_KEY = 'YOUR_GPT_API_KEY'
-openai.api_key = OPENAI_API_KEY
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "YOUR_GOOGLE_CREDENTIALS_JSON_PATH"
-client = vision.ImageAnnotatorClient()
-API_KEY = "YOUR_OPENROUTER_KEY"
-
+from config import (
+    TEMP_IMG_FOLDER,
+    FIRST_OUTPUT_FILE,
+    CORRECTED_OUTPUT_FILE,
+    PDF_FILE,
+    OPENAI_API_KEY,
+    GOOGLE_CREDENTIALS_PATH,
+    OPENROUTER_API_KEY
+)
 # batch processing constants
 MAX_RETRIES_GPT4 = 3
 MAX_CHARS_PER_BATCH = 1500
@@ -123,7 +119,7 @@ def gpt_parse():
                         messages=[
                             {
                                 "role": "user",
-                                "content": f"""You are supposed to check the following text for spelling errors in Pali, Sanskrit and Hindi. Return ONLY the formatted text, not a single word of English or any other lamguage. All of this will go into a text file for direct evaluation with CER. No "Here's the text" or anything like that. Look carefully and give ONLY, I repeat ONLY the Devanagari text. Keep the page and line breaks as they are.\n\n{batch}"""
+                                "content": f"""You are supposed to check the following text for spelling errors in Pali, Sanskrit and Hindi. Return ONLY the formatted text, not a single word of English or any other language. All of this will go into a text file for direct evaluation with CER. No "Here's the text" or anything like that. Look carefully and give ONLY, I repeat ONLY the Devanagari text. Keep the page and line breaks as they are.\n\n{batch}"""
                             }
                         ],
                         temperature=0.2,
@@ -131,7 +127,7 @@ def gpt_parse():
                     )
 
                     corrected = response.choices[0].message.content.strip()
-                    out_file.write(corrected + "\n\n")
+                    out_file.write(corrected.strip() + "\n\n")
                     out_file.flush()
 
                     print(f"[GPT-4] Batch {i+1} done in {time.time() - start:.2f}s")
@@ -173,7 +169,7 @@ def deepseek_parse():
 
     with open(CORRECTED_OUTPUT_FILE, "w", encoding="utf-8") as out_f:
         for i, batch in enumerate(batches):
-            prompt = f"""You are supposed to check the following text for spelling errors in Pali, Sanskrit and Hindi. Return ONLY the text, not a single word of English or any other lamguage. All of this will go into a text file for direct evaluation with CER. No "Here's the text" or anything like that. Look carefully and give ONLY, I repeat ONLY the Devanagari text. Do not hallucinate.\n\n{batch}"""
+            prompt = f"""You are supposed to check the following text for spelling errors in Pali, Sanskrit and Hindi. Return ONLY the text, not a single word of English or any other language. All of this will go into a text file for direct evaluation with CER. No "Here's the text" or anything like that. Look carefully and give ONLY, I repeat ONLY the Devanagari text. Do not hallucinate.\n\n{batch}"""
             payload = {
                 "model": MODEL,
                 "messages": [{"role": "user", "content": prompt}]
@@ -184,7 +180,7 @@ def deepseek_parse():
                 response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
                 response.raise_for_status()
                 corrected = response.json()["choices"][0]["message"]["content"]
-                out_f.write(corrected + "\n\n")
+                out_f.write(corrected.strip() + "\n\n")
                 time.sleep(1.5)
             except Exception as e:
                 print(f"[ERROR] Batch {i+1} failed: {e}")
